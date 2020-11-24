@@ -1,55 +1,61 @@
-﻿// Ref: https://archive.codeplex.com/?p=websocket4net
-// Ref: https://stackoverflow.com/questions/5420656/unable-to-read-data-from-the-transport-connection-an-existing-connection-was-f
-
-using SuperSocket.ClientEngine;
-using System;
-using System.Net;
+﻿using System;
+using System.Net.WebSockets;
+using System.Text;
 using System.Threading;
-using WebSocket4Net;
+using System.Threading.Tasks;
 
 namespace CSharp_WebSocket
 {
     class Program
     {
-        private static WebSocket _mWebsocket = null;
-
-        private static void OnWebSocket_Opened(object sender, EventArgs e)
+        static async void ConnectAndSend()
         {
-            _mWebsocket.Send("Hello World!");
-        }
+            ClientWebSocket client = new ClientWebSocket();
+            Uri uri = new Uri("wss://WEB_SOCKET_ENDPOINT");
 
-        private static void OnWebSocket_Error(object sender, ErrorEventArgs e)
-        {
-            Console.WriteLine("WebSocket Error: {0}", e.Exception);
-        }
+            var cts = new CancellationTokenSource();
+            await client.ConnectAsync(uri, cts.Token);
 
-        private static void OnWebSocket_Closed(object sender, EventArgs e)
-        {
-            Console.WriteLine("WebSocket Closed");
-        }
+            while (client.State != WebSocketState.Open)
+            {
+                await Task.Delay(100);
+            }
+            Console.WriteLine("WebSocket connected!");
 
-        private static void OnWebSocket_MessageReceived(object sender, MessageReceivedEventArgs e)
-        {
-            Console.WriteLine("WebSocket MessageReceived: {0}", e);
-        }
+            try
+            {
+                string message = "{\"action\":\"sendmessage\", \"data\":\"hello C#\"}";
+                byte[] sendBytes = UTF8Encoding.UTF8.GetBytes(message);
+                var sendBuffer = new ArraySegment<byte>(sendBytes);
+                cts = new CancellationTokenSource();
+                await client.SendAsync(sendBuffer, WebSocketMessageType.Text, true, cts.Token);
+            }
+            catch
+            {
+            }
+            finally
+            {
+                Console.WriteLine("Data sent!");
+            }
 
+            try
+            {
+                cts = new CancellationTokenSource();
+                await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Exit", cts.Token);
+            }
+            catch
+            {
+            }
+            finally
+            {
+                Console.WriteLine("WebSocket closed!");
+            }
+        }
         static void Main(string[] args)
         {
-            System.Net.ServicePointManager.Expect100Continue = false;
-            System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-            _mWebsocket = new WebSocket("wss://THE_ENDPOINT");
-            _mWebsocket.Opened += new EventHandler(OnWebSocket_Opened);
-            _mWebsocket.Error += new EventHandler<ErrorEventArgs>(OnWebSocket_Error);
-            _mWebsocket.Closed += new EventHandler(OnWebSocket_Closed);
-            _mWebsocket.MessageReceived += new EventHandler<MessageReceivedEventArgs>(OnWebSocket_MessageReceived);
-
-            _mWebsocket.Open();
-
-            while (true)
-            {
-                Thread.Sleep(0);
-            }
+            Console.WriteLine("Press Enter to Exit.");
+            ConnectAndSend();
+            Console.ReadKey();
         }
     }
 }
